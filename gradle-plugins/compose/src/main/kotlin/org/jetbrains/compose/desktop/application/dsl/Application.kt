@@ -68,4 +68,9 @@ open class Application @Inject constructor(
     fun nativeDistributions(fn: Action<NativeDistributions>) {
         fn.execute(nativeDistributions)
     }
+
+    val proguardDistributions: ProGuardDistributions = objects.newInstance(ProGuardDistributions::class.java)
+    fun proguardDistributions(fn: Action<ProGuardDistributions>) {
+        fn.execute(proguardDistributions)
+    }
 }

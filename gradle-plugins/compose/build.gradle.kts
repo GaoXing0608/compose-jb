@@ -67,6 +67,7 @@ dependencies {
     // include relocated download task to avoid potential runtime conflicts
     embedded("de.undercouch:gradle-download-task:4.1.1")
     embedded(project(":preview-rpc"))
+    embedded("com.guardsquare:proguard-gradle:7.1.0")
 }
 
 val shadow = tasks.named<ShadowJar>("shadowJar") {

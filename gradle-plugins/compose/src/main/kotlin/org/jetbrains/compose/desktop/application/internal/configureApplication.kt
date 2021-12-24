@@ -18,6 +18,7 @@ import org.jetbrains.compose.desktop.application.internal.validation.validatePac
 import org.jetbrains.compose.desktop.application.tasks.*
 import org.jetbrains.compose.internal.*
 import org.jetbrains.kotlin.gradle.plugin.KotlinPlatformType
+import proguard.gradle.ProGuardTask
 import java.io.File
 import java.util.*
 
@@ -116,6 +117,38 @@ internal fun Project.configurePackagingTasks(apps: Collection<Application>) {
             )
         }
 
+        val proguard = tasks.composeTask<ProGuardTask>(
+            taskName("proguard", app)
+        ) {
+            if (app.proguardDistributions.minifyEnabled) {
+                val proguardFile = File(rootDir, app.proguardDistributions.proguardFile)
+                if (!proguardFile.exists()) {
+                    throw GradleException("ProGuard configuration file ${proguardFile.path} not found")
+                }
+
+                // Add the jar files for compile
+                libraryjars(configurations.getByName("runtimeClasspath").files())
+                if (System.getProperty("java.version").startsWith("1.")) {
+                    libraryjars("${System.getProperty("java.home")}/lib/rt.jar")
+                } else {
+                    libraryjars("${System.getProperty("java.home")}/jmods/java.base.jmod")
+                    libraryjars("${System.getProperty("java.home")}/jmods/java.desktop.jmod")
+                }
+
+                // Set the output for mapping
+                printmapping("$buildDir/proguard/mapping.txt")
+                configuration(proguardFile)
+
+                val packageName = app.nativeDistributions.packageName
+                val packageVersion = app.nativeDistributions.packageVersion
+                val libFile = File(buildDir, "libs/$packageName-$packageVersion.jar")
+                injars(libFile)
+                outjars(libFile)
+            } else {
+                logger.info("The proguard not enabled")
+            }
+        }
+
         val packageFormats = app.nativeDistributions.targetFormats.map { targetFormat ->
             val packageFormat = tasks.composeTask<AbstractJPackageTask>(
                 taskName("package", app, targetFormat.name),
@@ -131,10 +164,11 @@ internal fun Project.configurePackagingTasks(apps: Collection<Application>) {
                     configurePackagingTask(
                         app,
                         createRuntimeImage = createRuntimeImage,
-                        prepareAppResources = prepareAppResources
+                        prepareAppResources = prepareAppResources,
+                        proguard = proguard
                     )
                 } else {
-                    configurePackagingTask(app, createAppImage = createDistributable)
+                    configurePackagingTask(app, createAppImage = createDistributable, proguard = proguard)
                 }
             }
 
@@ -184,7 +218,8 @@ internal fun AbstractJPackageTask.configurePackagingTask(
     app: Application,
     createAppImage: TaskProvider<AbstractJPackageTask>? = null,
     createRuntimeImage: TaskProvider<AbstractJLinkTask>? = null,
-    prepareAppResources: TaskProvider<Sync>? = null
+    prepareAppResources: TaskProvider<Sync>? = null,
+    proguard: TaskProvider<ProGuardTask>? = null
 ) {
     enabled = targetFormat.isCompatibleWithCurrentOS
 
@@ -202,6 +237,10 @@ internal fun AbstractJPackageTask.configurePackagingTask(
         dependsOn(prepareResources)
         val resourcesDir = project.layout.dir(prepareResources.map { it.destinationDir })
         appResourcesDir.set(resourcesDir)
+    }
+
+    proguard?.let { proguard ->
+        dependsOn(proguard)
     }
 
     configurePlatformSettings(app)
